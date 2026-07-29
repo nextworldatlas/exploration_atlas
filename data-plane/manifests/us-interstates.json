@@ -1,0 +1,50 @@
+{
+  "slug": "us-interstates",
+  "title": "US Interstate Highways",
+  "category": "transport",
+  "geometryType": "line",
+  "hierarchy": [{ "kind": "interstate", "role": "leaf" }],
+  "completion": {
+    "rule": "weighted",
+    "weightField": "length_mi",
+    "unit": "mi"
+  },
+  "learnTabs": ["overview", "history", "engineering", "geography", "facts", "timeline"],
+  "attributesSchema": {
+    "type": "object",
+    "properties": {
+      "length_mi": { "type": "number" },
+      "route_number": { "type": "integer" }
+    }
+  },
+  "map": {
+    "pmtilesUrl": "/tiles/us-interstates.pmtiles",
+    "sourceLayer": "components",
+    "layers": [
+      {
+        "type": "line",
+        "paint": { "line-width": ["interpolate", ["linear"], ["zoom"], 3, 1.4, 8, 4] },
+        "layout": { "line-cap": "round", "line-join": "round" }
+      },
+      {
+        "type": "symbol",
+        "minzoom": 3,
+        "layout": {
+          "symbol-placement": "line",
+          "symbol-spacing": 350,
+          "text-field": ["concat", "I-", ["to-string", ["get", "route_number"]]],
+          "text-font": ["Noto Sans Bold"],
+          "text-size": 11
+        },
+        "paint": {
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.6
+        }
+      }
+    ],
+    "colors": { "done": "#0ea5e9", "missing": "#64748b", "wishlist": "#f59e0b" },
+    "center": [-96.5, 39.5],
+    "zoom": 3.6
+  },
+  "badges": ["interstate-first", "interstate-1000mi", "interstate-coast-to-coast"]
+}

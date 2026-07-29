@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.dev/
+.env
+*.tsbuildinfo
+next-env.d.ts
+
+# data-plane working files (downloads, intermediate geojson/mbtiles)
+data-plane/.cache/
+
+# Built .pmtiles ARE committed (≈8 MB total): they're the map layer, and
+# shipping them in the repo means deploys never need the geo toolchain
+# (shp2pgsql / go-pmtiles). Rebuild with `npm run tiles:build` after imports.
+public/tiles/*.mbtiles

@@ -1,0 +1,28 @@
+{
+  "slug": "us-states",
+  "title": "US States",
+  "category": "admin",
+  "geometryType": "polygon",
+  "hierarchy": [{ "kind": "us_state", "role": "leaf" }],
+  "completion": { "rule": "count" },
+  "learnTabs": ["overview", "geography", "history", "culture", "facts"],
+  "attributesSchema": {
+    "type": "object",
+    "properties": {
+      "postal": { "type": "string" },
+      "region": { "type": "string" }
+    }
+  },
+  "map": {
+    "pmtilesUrl": "/tiles/us-states.pmtiles",
+    "sourceLayer": "components",
+    "layers": [
+      { "type": "fill", "paint": { "fill-opacity": 0.45 } },
+      { "type": "line", "paint": { "line-width": 0.75 } }
+    ],
+    "colors": { "done": "#f43f5e", "missing": "#94a3b8", "wishlist": "#f59e0b" },
+    "center": [-96.5, 39.5],
+    "zoom": 3.2
+  },
+  "badges": ["states-first", "states-10", "states-25", "states-all"]
+}

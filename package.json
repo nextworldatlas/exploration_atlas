@@ -1,0 +1,48 @@
+{
+  "name": "next-world-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:start": "node scripts/db.mjs start",
+    "db:stop": "node scripts/db.mjs stop",
+    "db:status": "node scripts/db.mjs status",
+    "db:migrate": "tsx data-plane/migrate.ts",
+    "seed:systems": "tsx data-plane/seed-systems.ts",
+    "seed:badges": "tsx data-plane/seed-badges.ts",
+    "import:countries": "tsx data-plane/importers/natural-earth.ts",
+    "import:parks": "tsx data-plane/importers/nps-parks.ts",
+    "import:interstates": "tsx data-plane/importers/interstates.ts",
+    "import:all": "npm run import:countries && npm run import:parks && npm run import:interstates",
+    "tiles:build": "tsx data-plane/tiles/build-tiles.ts",
+    "content:stubs": "tsx data-plane/content/stubs.ts",
+    "content:facts": "tsx data-plane/content/wikidata-facts.ts",
+    "rebuild:progress": "tsx data-plane/rebuild-progress.ts",
+    "rebuild:closure": "tsx data-plane/rebuild-closure.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "maplibre-gl": "^5.0.0",
+    "next": "^15.5.0",
+    "pg": "^8.16.0",
+    "pmtiles": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/geojson-vt": "^3.2.5",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "geojson-vt": "^4.0.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vt-pbf": "^3.1.3"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "slug": "countries",
+  "title": "Countries of the World",
+  "category": "admin",
+  "geometryType": "polygon",
+  "hierarchy": [
+    { "kind": "continent", "role": "container" },
+    { "kind": "world_region", "role": "container", "container": "continent" },
+    { "kind": "country", "role": "leaf", "container": "world_region" }
+  ],
+  "completion": { "rule": "count", "groupBy": "container" },
+  "learnTabs": ["overview", "geography", "history", "culture", "facts"],
+  "attributesSchema": {
+    "type": "object",
+    "properties": {
+      "iso_a2": { "type": "string" },
+      "continent": { "type": "string" },
+      "pop_est": { "type": "number" }
+    }
+  },
+  "map": {
+    "pmtilesUrl": "/tiles/countries.pmtiles",
+    "sourceLayer": "components",
+    "layers": [
+      { "type": "fill", "paint": { "fill-opacity": 0.45 } },
+      { "type": "line", "paint": { "line-width": 0.5 } }
+    ],
+    "colors": { "done": "#8b5cf6", "missing": "#94a3b8", "wishlist": "#f59e0b" },
+    "center": [10, 25],
+    "zoom": 1.4
+  },
+  "badges": ["countries-first", "countries-10", "countries-25", "countries-50"]
+}

@@ -1,0 +1,28 @@
+{
+  "slug": "national-parks",
+  "title": "US National Parks",
+  "category": "nature",
+  "geometryType": "polygon",
+  "hierarchy": [{ "kind": "national_park", "role": "leaf" }],
+  "completion": { "rule": "count" },
+  "learnTabs": ["overview", "geography", "ecology", "history", "facts", "timeline"],
+  "attributesSchema": {
+    "type": "object",
+    "properties": {
+      "nps_code": { "type": "string" },
+      "state": { "type": "string" }
+    }
+  },
+  "map": {
+    "pmtilesUrl": "/tiles/national-parks.pmtiles",
+    "sourceLayer": "components",
+    "layers": [
+      { "type": "fill", "paint": { "fill-opacity": 0.55 } },
+      { "type": "line", "paint": { "line-width": 1 } }
+    ],
+    "colors": { "done": "#16a34a", "missing": "#94a3b8", "wishlist": "#f59e0b" },
+    "center": [-110, 42],
+    "zoom": 3.2
+  },
+  "badges": ["parks-first", "parks-10", "parks-all"]
+}
