@@ -5,7 +5,14 @@ import pg from "pg";
 const connectionString =
   process.env.DATABASE_URL ?? "postgres://postgres@localhost:5433/atlas";
 
-export const pool = new pg.Pool({ connectionString });
+// Same TLS handling as the serving pool: managed providers need encryption
+// without strict provider-CA verification (see src/lib/db.ts).
+const wantsSsl = /sslmode=(?!disable)/.test(connectionString);
+
+export const pool = new pg.Pool({
+  connectionString,
+  ...(wantsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+});
 
 export async function query<R extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
