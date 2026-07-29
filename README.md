@@ -125,6 +125,41 @@ No migrations. No app code. If you're tempted to branch on
 - Every manifest passes the validator before insert.
 - A new system must require zero migrations.
 
+## Deployment (GitHub → Hostinger)
+
+The app is a standard Next.js server (`npm run build` / `npm start`) plus a
+PostGIS database. The built map tiles are committed, so production never
+needs the geo toolchain.
+
+**Database.** Hostinger's shared/cloud plans provide MySQL, not PostGIS, so
+use one of:
+- a free managed Postgres with PostGIS — **Neon** or **Supabase** (enable the
+  `postgis` extension in their dashboard), or
+- a Hostinger **VPS** running Postgres + PostGIS yourself.
+
+Load production data from your local dev database once — no importers needed
+on the server:
+
+```bash
+.dev/pg/bin/pg_dump -h localhost -p 5433 -U postgres atlas > atlas.sql
+psql "<PRODUCTION_DATABASE_URL>" -f atlas.sql
+```
+
+**App on Hostinger.**
+1. Push this repo to GitHub (see below) and connect it in Hostinger's panel
+   (Node.js app / Git deployment), or clone it on a VPS.
+2. Set the environment variable `DATABASE_URL` to the production database
+   (include `?sslmode=require` for Neon/Supabase).
+3. Build & run: `npm ci && npm run build && npm start` (on a VPS, keep it
+   alive with pm2: `pm2 start npm --name atlas -- start`).
+4. Node 20.11+ required (`import.meta.dirname`).
+
+**Ongoing updates.** Work locally with Claude → verify on localhost →
+`git push` → redeploy (Hostinger auto-deploys on push when Git deployment is
+configured; on a VPS: `git pull && npm ci && npm run build && pm2 restart atlas`).
+Schema changes ship as new files in `db/migrations/` — run
+`npm run db:migrate` against production (it's idempotent) before restarting.
+
 ## Roadmap state
 
 - **Phase 0 & 1 — done.** Generic engine end-to-end for all four systems:
