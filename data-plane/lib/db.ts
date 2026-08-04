@@ -2,17 +2,13 @@
 // importers, tile builds, and content jobs run offline, never in a request path.
 import pg from "pg";
 
+import { sslConfig } from "../../src/lib/db";
+
 const connectionString =
   process.env.DATABASE_URL ?? "postgres://postgres@localhost:5433/atlas";
 
-// Same TLS handling as the serving pool: managed providers need encryption
-// without strict provider-CA verification (see src/lib/db.ts).
-const wantsSsl = /sslmode=(?!disable)/.test(connectionString);
-
-export const pool = new pg.Pool({
-  connectionString,
-  ...(wantsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-});
+// Same TLS handling as the serving pool (see src/lib/db.ts).
+export const pool = new pg.Pool(sslConfig(connectionString));
 
 export async function query<R extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,

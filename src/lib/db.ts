@@ -3,21 +3,28 @@ import pg from "pg";
 
 const globalForPg = globalThis as unknown as { __nwaPool?: pg.Pool };
 
+// Managed Postgres (Supabase/Neon/…) requires TLS but presents provider-CA
+// certificates that fail node-postgres's strict verify-full interpretation of
+// sslmode=require — and a sslmode param in the URL overrides any ssl option
+// passed alongside it. So: strip the param and control TLS explicitly.
+export function sslConfig(raw: string): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
+  try {
+    const url = new URL(raw);
+    const mode = url.searchParams.get("sslmode");
+    if (!mode || mode === "disable") return { connectionString: raw };
+    url.searchParams.delete("sslmode");
+    return { connectionString: url.toString(), ssl: { rejectUnauthorized: false } };
+  } catch {
+    return { connectionString: raw };
+  }
+}
+
 const connectionString =
   process.env.DATABASE_URL ?? "postgres://postgres@localhost:5433/atlas";
 
-// Managed Postgres (Supabase/Neon/…) requires TLS but presents provider-CA
-// certificates that fail node-postgres's strict verify-full interpretation of
-// sslmode=require. Encrypt without CA verification when the URL asks for SSL.
-const wantsSsl = /sslmode=(?!disable)/.test(connectionString);
-
 export const pool =
   globalForPg.__nwaPool ??
-  new pg.Pool({
-    connectionString,
-    max: 10,
-    ...(wantsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-  });
+  new pg.Pool({ max: 10, ...sslConfig(connectionString) });
 
 if (process.env.NODE_ENV !== "production") globalForPg.__nwaPool = pool;
 
