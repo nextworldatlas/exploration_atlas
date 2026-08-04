@@ -7,11 +7,18 @@ const globalForPg = globalThis as unknown as { __nwaPool?: pg.Pool };
 // certificates that fail node-postgres's strict verify-full interpretation of
 // sslmode=require — and a sslmode param in the URL overrides any ssl option
 // passed alongside it. So: strip the param and control TLS explicitly.
+//
+// TLS is on for any remote host so the URL needs no sslmode parameter at all;
+// that keeps deployment values free of characters (%, ?, &) that hosting
+// panels are prone to shell-escaping.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", ""]);
+
 export function sslConfig(raw: string): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
   try {
     const url = new URL(raw);
     const mode = url.searchParams.get("sslmode");
-    if (!mode || mode === "disable") return { connectionString: raw };
+    if (mode === "disable") return { connectionString: raw };
+    if (!mode && LOCAL_HOSTS.has(url.hostname)) return { connectionString: raw };
     url.searchParams.delete("sslmode");
     return { connectionString: url.toString(), ssl: { rejectUnauthorized: false } };
   } catch {
