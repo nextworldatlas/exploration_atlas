@@ -236,12 +236,7 @@ export default function SystemMap({
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     // MapLibre reports tile/source failures through 'error' events rather than
     // throwing; surface them so a broken layer is diagnosable in the browser.
-    m.on("error", (e) => {
-      const w = window as unknown as { __mapErrors?: string[] };
-      (w.__mapErrors ??= []).push(String(e.error?.message ?? e.error ?? e));
-      console.error("[map]", e.error ?? e);
-    });
-    (window as unknown as { __map?: maplibregl.Map }).__map = m;
+    m.on("error", (e) => console.error("[map]", e.error ?? e));
     m.on("load", () => setMap(m));
     return () => {
       setMap(null);
