@@ -154,6 +154,17 @@ psql "<PRODUCTION_DATABASE_URL>" -f atlas.sql
    alive with pm2: `pm2 start npm --name atlas -- start`).
 4. Node 20.11+ required (`import.meta.dirname`).
 
+**Two things production taught us.**
+- `DATABASE_URL` must contain **no percent-encoding**: hPanel shell-escapes `%`
+  in env values, corrupting the password. Use literal characters. TLS needs no
+  `sslmode` parameter — it is enabled automatically for any non-localhost host.
+- `.pmtiles` archives are served by `/api/tiles/[file]` rather than statically,
+  because the hosting layer ignores HTTP Range requests (returns the whole
+  archive with `200`), which breaks the PMTiles protocol.
+
+`GET /api/health` reports Node version, the parsed connection shape (never the
+password) and database reachability — check it first when a deploy misbehaves.
+
 **Ongoing updates.** Work locally with Claude → verify on localhost →
 `git push` → redeploy (Hostinger auto-deploys on push when Git deployment is
 configured; on a VPS: `git pull && npm ci && npm run build && pm2 restart atlas`).
