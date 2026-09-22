@@ -37,12 +37,12 @@
           "text-size": 11
         },
         "paint": {
-          "text-halo-color": "#ffffff",
+          "text-halo-color": "#0e3a5f",
           "text-halo-width": 1.6
         }
       }
     ],
-    "colors": { "done": "#0ea5e9", "missing": "#64748b", "wishlist": "#f59e0b" },
+    "colors": { "done": "#ff8a3d", "missing": "#b3cfe6", "wishlist": "#7bd3ea" },
     "center": [-96.5, 39.5],
     "zoom": 3.6
   },

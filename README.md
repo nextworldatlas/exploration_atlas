@@ -56,6 +56,36 @@ viewport presets above the per-system layer toggles. In production with tippecan
 `tippecanoe -o {slug}.pmtiles -l components --use-attribute-for-id=…` is the
 equivalent build; the Node pipeline exists so the whole build runs anywhere.
 
+## Design — Blueprint · Field Survey
+
+Architectural drafting: cyan-blue sheet, white linework on a drafting grid,
+orange for the active target. Tokens live in `src/app/globals.css`; changing a
+value there restyles the whole app.
+
+| Token | Value | Use |
+|---|---|---|
+| `--ocean` | `#0e3a5f` | page background |
+| `--sheet` | `#134a76` | panels, cards |
+| `--paper` | `#eaf4fb` | primary text, linework |
+| `--muted` | `#b3cfe6` | secondary text, captions |
+| `--line` | `#4d86b3` | borders, hairline grid |
+| `--marker` | `#ff8a3d` | primary accent — CTAs, active states |
+| `--dimension` | `#7bd3ea` | secondary accent — success, links |
+| `--on-accent` | `#0b0b0b` | text on marker/dimension fills (never white) |
+
+**Montserrat, two weights only** — Bold 700 for headings, data, buttons, nav,
+tags and pills; Regular 400 for body and inputs. Black (900) is deliberately
+unused: size and colour carry hierarchy, not weight. Self-hosted through
+`next/font`, so only those two weights ship.
+
+**Components** are drafted, never soft: 2px radius everywhere (`--radius`),
+1px hairline borders in `--line`, inputs and buttons 44px tall minimum.
+
+**Maps** use the dark OpenFreeMap basemap so the sheet carries through, with
+uniform completion semantics across every system — missing in linework blue,
+completed in marker orange, wishlisted in dimension cyan. Those live in each
+manifest's `map.colors`, so `npm run seed:systems` applies any change.
+
 ## Getting started
 
 Requires Node 20.11+ and a PostGIS 3.x database.

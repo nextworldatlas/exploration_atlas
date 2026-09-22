@@ -87,10 +87,12 @@ export function validateManifest(input: unknown): SystemManifest {
   return manifestSchema.parse(input);
 }
 
+// Blueprint palette: linework blue for what is missing, marker orange for the
+// active target (completed), dimension cyan for wishlisted.
 export const DEFAULT_MAP_COLORS = {
-  done: "#10b981",
-  missing: "#94a3b8",
-  wishlist: "#f59e0b",
+  done: "#ff8a3d",
+  missing: "#4d86b3",
+  wishlist: "#7bd3ea",
 };
 
 // Minimal JSON-Schema checker for components.attrs at import time. Supports the

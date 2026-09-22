@@ -20,7 +20,7 @@
       { "type": "fill", "paint": { "fill-opacity": 0.55 } },
       { "type": "line", "paint": { "line-width": 1 } }
     ],
-    "colors": { "done": "#16a34a", "missing": "#94a3b8", "wishlist": "#f59e0b" },
+    "colors": { "done": "#ff8a3d", "missing": "#4d86b3", "wishlist": "#7bd3ea" },
     "center": [-110, 42],
     "zoom": 3.2
   },

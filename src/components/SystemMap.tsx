@@ -20,7 +20,8 @@ function ensurePmtilesProtocol() {
   protocolRegistered = true;
 }
 
-const BASEMAP = "https://tiles.openfreemap.org/styles/positron";
+// Dark basemap so the navy blueprint sheet carries through the map surface.
+const BASEMAP = "https://tiles.openfreemap.org/styles/dark";
 
 interface Selected {
   system: MapSystem;
