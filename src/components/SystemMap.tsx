@@ -37,16 +37,23 @@ interface HoverInfo {
   done: boolean;
 }
 
-function colorExpression(colors: NonNullable<MapSystem["map"]["colors"]>) {
+// A manifest describes a system's SHAPE (geometry, widths, label fields); the
+// theme owns COLOUR. Completion semantics are identical across systems —
+// linework blue for missing, marker orange for done, dimension cyan for
+// wishlisted — so the palette lives here rather than in per-system data.
+function colorExpression() {
   return [
     "case",
     ["boolean", ["feature-state", "done"], false],
-    colors.done,
+    DEFAULT_MAP_COLORS.done,
     ["boolean", ["feature-state", "wishlist"], false],
-    colors.wishlist ?? DEFAULT_MAP_COLORS.wishlist,
-    colors.missing,
+    DEFAULT_MAP_COLORS.wishlist,
+    DEFAULT_MAP_COLORS.missing,
   ];
 }
+
+// Halo keeps labels legible against the dark basemap, so it is theme-owned too.
+const LABEL_HALO = "#0e3a5f";
 
 const COLOR_PROP: Record<string, string> = {
   line: "line-color",
@@ -87,7 +94,6 @@ function SystemOverlay({
 
   // source + layers
   useEffect(() => {
-    const colors = system.map.colors ?? DEFAULT_MAP_COLORS;
     if (!map.getSource(system.slug)) {
       map.addSource(system.slug, {
         type: "vector",
@@ -106,7 +112,9 @@ function SystemOverlay({
         ...(layer.maxzoom !== undefined ? { maxzoom: layer.maxzoom } : {}),
         paint: {
           ...(layer.paint as Record<string, unknown>),
-          [COLOR_PROP[layer.type]]: colorExpression(colors),
+          // theme-owned colour always wins over anything a manifest carries
+          [COLOR_PROP[layer.type]]: colorExpression(),
+          ...(layer.type === "symbol" ? { "text-halo-color": LABEL_HALO } : {}),
         },
         layout: (layer.layout as Record<string, unknown>) ?? {},
       } as never);

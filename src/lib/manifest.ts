@@ -41,13 +41,9 @@ export const manifestSchema = z
           })
         )
         .min(1),
-      colors: z
-        .object({
-          done: z.string(),
-          missing: z.string(),
-          wishlist: z.string().optional(),
-        })
-        .optional(),
+      // No per-system colours: completion semantics are uniform, so the
+      // palette is theme-owned (see DEFAULT_MAP_COLORS). Manifests describe
+      // shape — geometry, widths, zoom ranges, label fields.
       center: z.tuple([z.number(), z.number()]).optional(),
       zoom: z.number().optional(),
     }),
