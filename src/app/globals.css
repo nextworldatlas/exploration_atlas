@@ -432,6 +432,39 @@ input[type="search"] {
   font-weight: var(--w-regular);
 }
 
+/* input with an inline control, e.g. the password visibility toggle */
+.input-with-affix {
+  position: relative;
+  display: flex;
+}
+
+.input-with-affix input {
+  width: 100%;
+  padding-right: 4.2rem;
+}
+
+.input-affix {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  padding: 0 0.7rem;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-family: inherit;
+  font-weight: var(--w-bold);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.input-affix:hover {
+  color: var(--marker);
+}
+
 input::placeholder {
   color: var(--muted);
   opacity: 0.75;

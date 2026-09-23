@@ -16,6 +16,7 @@ export default function AccountPanel() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!data) return null;
 
@@ -79,14 +80,25 @@ export default function AccountPanel() {
           autoComplete="username"
           onChange={(e) => setUsername(e.target.value)}
         />
-        <input
-          type="password"
-          placeholder="password (8+ characters)"
-          value={password}
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
+        <div className="input-with-affix">
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="password (8+ characters)"
+            value={password}
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+          />
+          <button
+            type="button"
+            className="input-affix"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
         {error && (
           <div className="small" style={{ color: "#f87171" }}>
             {error}
@@ -101,6 +113,7 @@ export default function AccountPanel() {
             onClick={() => {
               setMode(mode === "signup" ? "login" : "signup");
               setError(null);
+              setShowPassword(false);
             }}
           >
             {mode === "signup" ? "I have an account" : "New here?"}

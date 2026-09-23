@@ -6,7 +6,6 @@ export interface SystemSummary {
   title: string;
   category: string;
   completion: SystemManifest["completion"];
-  colors?: { done: string; missing: string; wishlist?: string };
   total_count: number;
   completed_count: number;
   completed_weight: string | number;

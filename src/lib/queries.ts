@@ -32,7 +32,6 @@ export async function listSystemsWithProgress(userId: string) {
   const res = await query(
     `SELECT s.slug, s.title, s.category,
             s.manifest->'completion' AS completion,
-            s.manifest->'map'->'colors' AS colors,
             count(c.id) FILTER (WHERE c.role = 'leaf')::int AS total_count,
             COALESCE(p.completed_count, 0)::int AS completed_count,
             COALESCE(p.completed_weight, 0)::float AS completed_weight,
