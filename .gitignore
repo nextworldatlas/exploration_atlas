@@ -1,6 +1,8 @@
 node_modules/
 .next/
 .dev/
+# local database dumps (contain account rows — never commit)
+backups/
 .env
 *.tsbuildinfo
 next-env.d.ts

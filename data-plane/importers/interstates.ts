@@ -37,6 +37,27 @@ function findTool(name: string): string {
   return name; // rely on PATH (e.g. a system PostGIS install)
 }
 
+// Unzip portably. Windows' bsdtar reads zips, but Linux's GNU tar does not, so
+// try the dedicated tools first and keep tar as the last resort.
+function extractZip(zip: string, dir: string): void {
+  const attempts: [string, string[]][] = [
+    ["unzip", ["-oq", zip, "-d", dir]],
+    ["python3", ["-m", "zipfile", "-e", zip, dir]],
+    ["python", ["-m", "zipfile", "-e", zip, dir]],
+    ["tar", ["-xf", zip, "-C", dir]],
+  ];
+  const failures: string[] = [];
+  for (const [cmd, args] of attempts) {
+    try {
+      execFileSync(cmd, args, { stdio: "pipe" });
+      return;
+    } catch (e) {
+      failures.push(`${cmd}: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+  throw new Error(`could not extract ${zip}; install unzip.\n  ${failures.join("\n  ")}`);
+}
+
 async function stageShapefile(): Promise<void> {
   const zip = await download(ROADS_URL, "ne_10m_roads_north_america.zip");
   const dir = path.join(CACHE_DIR, "ne_10m_roads_north_america");
@@ -48,7 +69,7 @@ async function stageShapefile(): Promise<void> {
   ];
   if (!candidates.some(existsSync)) {
     mkdirSync(dir, { recursive: true });
-    execFileSync("tar", ["-xf", zip, "-C", dir]);
+    extractZip(zip, dir);
   }
   const shpPath = candidates.find(existsSync);
   if (!shpPath) throw new Error("shapefile not found after extraction");
