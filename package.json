@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "db:init": "node scripts/db.mjs init",
     "db:start": "node scripts/db.mjs start",
     "db:stop": "node scripts/db.mjs stop",
     "db:status": "node scripts/db.mjs status",

@@ -83,37 +83,50 @@ unused: size and colour carry hierarchy, not weight. Self-hosted through
 
 **Maps** use the dark OpenFreeMap basemap so the sheet carries through, with
 uniform completion semantics across every system — missing in linework blue,
-completed in marker orange, wishlisted in dimension cyan. Those live in each
-manifest's `map.colors`, so `npm run seed:systems` applies any change.
+completed in marker orange, wishlisted in dimension cyan. The theme owns these
+(`DEFAULT_MAP_COLORS` in `src/lib/manifest.ts`); manifests describe shape only.
 
 ## Getting started
 
-Requires Node 20.11+ and a PostGIS 3.x database.
+Requires Node 22.13+ (tiles use unflagged `node:sqlite`), PostgreSQL with
+PostGIS 3.x, `unzip`, and the [`pmtiles`](https://github.com/protomaps/go-pmtiles)
+CLI on PATH. On Ubuntu/Debian:
+
+```bash
+sudo apt install postgresql postgresql-16-postgis-3 postgis unzip   # postgis = shp2pgsql
+go install github.com/protomaps/go-pmtiles@latest                    # or a release binary
+```
+
+Then:
 
 ```bash
 npm install
-npm run db:start          # portable dev cluster in .dev/ (see below), port 5433
-npm run db:migrate        # schema
+cp .env.example .env      # DATABASE_URL → the local dev cluster
+npm run db:init           # create .dev/pgdata (port 5433), start it, create db "atlas"
+npm run db:migrate        # schema (enables the postgis extension)
 npm run seed:systems      # validate + upsert manifests
 npm run seed:badges
-npm run import:countries  # Natural Earth admin-0 + admin-1 (also US states)
-npm run import:parks      # NPS boundaries for the 63 parks
-npm run import:interstates# NE 10m roads → mainline route × state segments
-npm run tiles:build       # all systems → public/tiles/*.pmtiles
+npm run import:all        # countries + US states, national parks, interstates
 npm run content:stubs     # editorial + stub Learn blocks
 npm run content:facts     # Wikidata SPARQL → facts + factlist blocks
+npm run tiles:build       # all systems → public/tiles/*.pmtiles
 npm run dev               # http://localhost:3000
 ```
 
+Importers download from raw.githubusercontent.com, naciscdn.org and
+services1.arcgis.com; `content:facts` queries query.wikidata.org. Sandboxed
+environments must allow those hosts (plus registry.npmjs.org).
+
 ### The dev database
 
-`.dev/` holds a portable PostgreSQL 17 + PostGIS 3.6 (no admin install, data in
-`.dev/pgdata`, port 5433). It is not committed. To recreate it on another
-machine: unzip the EDB "binaries" archive for PostgreSQL 17 into `.dev/pg`,
-unzip the OSGeo PostGIS bundle over it, then
-`.dev/pg/bin/initdb -D .dev/pgdata -U postgres -A trust` and `npm run db:start`.
-Or point `DATABASE_URL` at any PostGIS database and skip all of that.
-`go-pmtiles` lives at `.dev/bin/go-pmtiles/pmtiles.exe` (or on PATH).
+`scripts/db.mjs` (`npm run db:init|db:start|db:stop|db:status`) manages a
+private cluster in `.dev/pgdata` on port 5433 with trust auth. It is not
+committed. It uses server binaries from `.dev/pg/bin` if present (a portable
+install, e.g. on Windows), else PATH, else `/usr/lib/postgresql/<ver>/bin`.
+Run as root (as in cloud containers), it runs them as the `postgres` system
+user, because PostgreSQL refuses to run as root.
+Or point `DATABASE_URL` at any PostGIS database and skip all of that. Never
+point development at the production database: it holds real accounts.
 
 ## Data plane commands
 
@@ -171,7 +184,7 @@ Load production data from your local dev database once — no importers needed
 on the server:
 
 ```bash
-.dev/pg/bin/pg_dump -h localhost -p 5433 -U postgres atlas > atlas.sql
+pg_dump postgres://postgres@localhost:5433/atlas > atlas.sql
 psql "<PRODUCTION_DATABASE_URL>" -f atlas.sql
 ```
 
