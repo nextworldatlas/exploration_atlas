@@ -61,9 +61,12 @@ MapLibre overzooms past it. Natural Earth 1:10M sources stop at z7, since
 deeper tiles add bytes but no real detail.
 
 **Component ids differ between databases** (identity columns follow insert
-order), and tiles bake them in. Tiles shipped to production must be built
-against a database whose `components` ids match production's. Rebuilding
-from a freshly imported local database breaks the live overlay.
+order), and tiles bake them in. Tiles shipped to production must carry
+production's ids: build them with `npm run tiles:release`, never plain
+`tiles:build`, which would break the live overlay. (Conversely, released
+tiles colour the wrong features against a local database; run `tiles:build`
+locally and don't commit the result.) The map requests archives with a
+`?v=<content hash>` so browsers never mix cached ranges across a rebuild.
 
 ## Design — Blueprint · Field Survey
 
@@ -142,7 +145,9 @@ point development at the production database: it holds real accounts.
 | Command | What it does |
 |---|---|
 | `npm run import:*` | Idempotent importers, keyed on stable external ids (ISO codes, NPS unit codes, route numbers). Re-running updates, never duplicates. The interstates importer also prunes out-of-scope data (3-digit spurs, legacy per-state segments). |
-| `npm run tiles:build [slug]` | Rebuild PMTiles for one or all systems. |
+| `npm run tiles:build [slug]` | Rebuild PMTiles for one or all systems, with this database's component ids (local use). |
+| `npm run tiles:release [slug]` | Rebuild PMTiles with production's component ids (fetched from the live site's public API, matched by place slug; refuses if the leaf sets differ). Use this for tiles you commit. |
+| `npm run seed:systems -- --sql` | Print the manifest upserts as one SQL transaction, for a SQL console such as Supabase's editor. |
 | `npm run content:stubs` | Ensure every (system, learn-tab) has content; unwritten tabs get an explicit `stub` block. |
 | `npm run content:facts` | Batched Wikidata SPARQL → `facts` table + deterministic factlist blocks. |
 | `npm run rebuild:progress` | Rebuild all `user_system_progress` from `experiences` (progress is derived, never authoritative). |

@@ -97,7 +97,7 @@ function SystemOverlay({
     if (!map.getSource(system.slug)) {
       map.addSource(system.slug, {
         type: "vector",
-        url: `pmtiles://${window.location.origin}${system.map.pmtilesUrl}`,
+        url: `pmtiles://${window.location.origin}${system.map.pmtilesUrl}?v=${process.env.NEXT_PUBLIC_TILES_VERSION}`,
       });
     }
     for (const [i, layer] of system.map.layers.entries()) {

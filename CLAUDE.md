@@ -40,12 +40,14 @@ and deployment. This file holds the rules and gotchas that are easy to trip on.
   or requests tiles. Route rAF through `setTimeout` or use a visible window.
 - **Tiles bake in `component_id`, and ids differ per database.** Never commit
   tiles built from a freshly imported local database: production's overlay
-  would colour the wrong features or none. Build shipped tiles against
-  production (read-only) or a copy of its `components` ids.
+  would colour the wrong features or none. Build committed tiles with
+  `npm run tiles:release` (takes ids from the live site's API by slug).
 - **Production database is Supabase** (reached via its pooler). Do not point
   local development at it — it holds real user accounts and progress.
 - **Pending:** production `systems.manifest` rows still carry obsolete
   `map.colors` and a white `text-halo-color`. Harmless (the code ignores them)
-  but re-run `npm run seed:systems` against production to clean them up.
+  but re-apply the manifests to clean them up. Cloud sessions can't reach the
+  Supabase ports, so paste `npm run seed:systems -- --sql` output into
+  Supabase's SQL editor.
 - Hostinger-specific deploy gotchas (env var `%` escaping, ignored Range
   requests) are in README → Deployment.

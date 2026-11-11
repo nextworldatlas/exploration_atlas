@@ -42,7 +42,22 @@ function findPmtiles(): string {
   return existsSync(bundled) ? bundled : "pmtiles";
 }
 
-async function buildSystem(slug: string): Promise<void> {
+// Component ids differ between databases, and tiles bake them in. With
+// --ids-from <origin>, ids come from that deployment's public components API,
+// matched by place slug, so tiles built from a local import fit production.
+async function fetchIds(origin: string, slug: string): Promise<Map<string, number>> {
+  const ids = new Map<string, number>();
+  for (let offset = 0; ; offset += 500) {
+    const url = `${origin}/api/systems/${slug}/components?limit=500&offset=${offset}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
+    const page: { components: { id: string; place_slug: string }[] } = await res.json();
+    for (const c of page.components) ids.set(c.place_slug, Number(c.id));
+    if (page.components.length < 500) return ids;
+  }
+}
+
+async function buildSystem(slug: string, idsFrom?: string): Promise<void> {
   const sys = await pool.query(`SELECT id, manifest FROM systems WHERE slug = $1`, [slug]);
   if (!sys.rows[0]) throw new Error(`unknown system '${slug}'`);
   const systemId = sys.rows[0].id;
@@ -68,6 +83,19 @@ async function buildSystem(slug: string): Promise<void> {
     [systemId]
   );
 
+  const remote = idsFrom ? await fetchIds(idsFrom, slug) : null;
+  if (remote) {
+    const local = new Set(res.rows.map((r) => r.slug as string));
+    const missing = [...local].filter((s) => !remote.has(s));
+    const extra = [...remote.keys()].filter((s) => !local.has(s));
+    if (missing.length || extra.length) {
+      throw new Error(
+        `${slug}: leaves differ from ${idsFrom}; refusing to build mismatched tiles.\n` +
+          `  only local: ${missing.join(", ") || "-"}\n  only remote: ${extra.join(", ") || "-"}`
+      );
+    }
+  }
+
   const features = res.rows.map((r) => {
     // scalar component attrs ride along as tile properties so manifest layers
     // (e.g. label expressions) can reference them
@@ -78,7 +106,8 @@ async function buildSystem(slug: string): Promise<void> {
     );
     return {
       type: "Feature" as const,
-      id: Number(r.component_id), // guardrail: PMTiles feature id = component_id
+      // guardrail: PMTiles feature id = component_id (the target database's)
+      id: remote ? remote.get(r.slug)! : Number(r.component_id),
       geometry: JSON.parse(r.geometry),
       properties: { ...scalarAttrs, name: r.name, slug: r.slug },
     };
@@ -180,13 +209,17 @@ async function buildSystem(slug: string): Promise<void> {
 }
 
 async function main() {
-  const arg = process.argv[2];
+  const args = process.argv.slice(2);
+  const at = args.indexOf("--ids-from");
+  const idsFrom = at >= 0 ? args.splice(at, 2)[1]?.replace(/\/+$/, "") : undefined;
+  if (at >= 0 && !idsFrom) throw new Error("--ids-from needs an origin, e.g. https://example.com");
+  const arg = args[0];
   const slugs = arg
     ? [arg]
     : (await pool.query(`SELECT slug FROM systems WHERE status = 'active' ORDER BY slug`)).rows.map(
         (r) => r.slug
       );
-  for (const slug of slugs) await buildSystem(slug);
+  for (const slug of slugs) await buildSystem(slug, idsFrom);
   await pool.end();
 }
 

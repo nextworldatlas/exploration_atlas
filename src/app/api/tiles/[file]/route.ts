@@ -21,8 +21,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ file: strin
 
   const filePath = path.join(TILES_DIR, file);
   let size: number;
+  let etag: string;
   try {
-    size = (await stat(filePath)).size;
+    const st = await stat(filePath);
+    size = st.size;
+    // strong ETag: the pmtiles client reloads the archive when it changes
+    etag = `"${size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
   } catch {
     return new Response("Not found", { status: 404 });
   }
@@ -30,7 +34,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ file: strin
   const baseHeaders: Record<string, string> = {
     "Content-Type": "application/octet-stream",
     "Accept-Ranges": "bytes",
-    // archives are rebuilt under a new deploy, so they can cache hard
+    ETag: etag,
+    // the map requests archives with a ?v=<content hash>, so they can cache hard
     "Cache-Control": "public, max-age=86400",
   };
 
