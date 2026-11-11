@@ -20,6 +20,7 @@
   "map": {
     "pmtilesUrl": "/api/tiles/us-interstates.pmtiles",
     "sourceLayer": "components",
+    "tileMaxZoom": 7,
     "layers": [
       {
         "type": "line",

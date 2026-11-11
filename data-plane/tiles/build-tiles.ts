@@ -1,16 +1,19 @@
 // Tile build (data plane, per system):
 //   PostGIS ── ST_AsGeoJSON ──▶ leaf features (id = component_id, ALWAYS)
-//           ── geojson-vt + vt-pbf ──▶ MBTiles (node:sqlite)
-//           ── go-pmtiles convert ──▶ public/tiles/{slug}.pmtiles
+//           ── tippecanoe ──▶ public/tiles/{slug}.pmtiles            (preferred)
+//   or      ── geojson-vt + vt-pbf ──▶ MBTiles (node:sqlite)
+//           ── go-pmtiles convert ──▶ public/tiles/{slug}.pmtiles    (fallback)
 //
 // The personal overlay hinges on feature id == component_id: the client sets
 // feature-state by component id to recolor done/missing without per-user tiles.
 //
-// In production with tippecanoe available, the equivalent is:
-//   tippecanoe -o {slug}.pmtiles -l components --use-attribute-for-id=component_id …
-// This Node pipeline exists so the whole build runs anywhere Node runs.
+// tippecanoe is used when it is on PATH: it simplifies per zoom, so tiles are
+// far smaller. Feature dropping is disabled because every checklist item must
+// be visible (and markable) at every zoom. The Node pipeline exists so the
+// build runs anywhere Node runs; force it with TILES_BUILDER=node.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { DatabaseSync } from "node:sqlite";
@@ -24,6 +27,16 @@ const OUT_DIR = path.join(ROOT, "public", "tiles");
 
 const MAX_ZOOM: Record<string, number> = { line: 10, polygon: 9, point: 12 };
 
+function hasTippecanoe(): boolean {
+  if (process.env.TILES_BUILDER === "node") return false;
+  try {
+    execFileSync("tippecanoe", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function findPmtiles(): string {
   const bundled = path.join(ROOT, ".dev", "bin", "go-pmtiles", "pmtiles.exe");
   return existsSync(bundled) ? bundled : "pmtiles";
@@ -35,7 +48,7 @@ async function buildSystem(slug: string): Promise<void> {
   const systemId = sys.rows[0].id;
   const geometryType: string = sys.rows[0].manifest.geometryType;
   const sourceLayer: string = sys.rows[0].manifest.map.sourceLayer;
-  const maxZoom = MAX_ZOOM[geometryType] ?? 10;
+  const maxZoom: number = sys.rows[0].manifest.map.tileMaxZoom ?? MAX_ZOOM[geometryType] ?? 10;
 
   const res = await pool.query(
     `SELECT c.id AS component_id, p.name, p.slug, c.role, c.attrs,
@@ -70,6 +83,36 @@ async function buildSystem(slug: string): Promise<void> {
       properties: { ...scalarAttrs, name: r.name, slug: r.slug },
     };
   });
+  mkdirSync(OUT_DIR, { recursive: true });
+  const pmtilesPath = path.join(OUT_DIR, `${slug}.pmtiles`);
+  rmSync(pmtilesPath, { force: true });
+
+  if (hasTippecanoe()) {
+    console.log(`${slug}: ${features.length} leaf features → tippecanoe (maxzoom ${maxZoom})`);
+    const geojsonPath = path.join(tmpdir(), `atlas-${slug}-${process.pid}.geojsonl`);
+    writeFileSync(geojsonPath, features.map((f) => JSON.stringify(f)).join("\n") + "\n");
+    execFileSync(
+      "tippecanoe",
+      [
+        "-o", pmtilesPath,
+        "-l", sourceLayer,
+        "-n", slug,
+        "-Z0", `-z${maxZoom}`,
+        "-r1", // keep every feature at every zoom: no dot-dropping…
+        "--no-feature-limit", // …and no dropping to fit tile limits
+        "--no-tile-size-limit",
+        ...(geometryType === "polygon" ? ["--detect-shared-borders"] : []),
+        "--quiet",
+        "--force",
+        geojsonPath,
+      ],
+      { stdio: "inherit" }
+    );
+    rmSync(geojsonPath, { force: true });
+    console.log(`${slug}: → public/tiles/${slug}.pmtiles`);
+    return;
+  }
+
   console.log(`${slug}: ${features.length} leaf features → tiles (maxzoom ${maxZoom})`);
 
   const index = geojsonvt(
@@ -77,7 +120,6 @@ async function buildSystem(slug: string): Promise<void> {
     { maxZoom, indexMaxZoom: 5, buffer: 64, extent: 4096 }
   );
 
-  mkdirSync(OUT_DIR, { recursive: true });
   const mbtilesPath = path.join(OUT_DIR, `${slug}.mbtiles`);
   rmSync(mbtilesPath, { force: true });
   const db = new DatabaseSync(mbtilesPath);
@@ -132,8 +174,6 @@ async function buildSystem(slug: string): Promise<void> {
   for (const [k, v] of Object.entries(metadata)) meta.run(k, v);
   db.close();
 
-  const pmtilesPath = path.join(OUT_DIR, `${slug}.pmtiles`);
-  rmSync(pmtilesPath, { force: true });
   execFileSync(findPmtiles(), ["convert", mbtilesPath, pmtilesPath], { stdio: "inherit" });
   rmSync(mbtilesPath, { force: true });
   console.log(`${slug}: ${count} tiles → public/tiles/${slug}.pmtiles`);

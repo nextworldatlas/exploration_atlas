@@ -38,6 +38,10 @@ and deployment. This file holds the rules and gotchas that are easy to trip on.
 - **Blank map during automated verification is usually not a bug.** Hidden or
   backgrounded tabs pause `requestAnimationFrame`, so MapLibre never renders
   or requests tiles. Route rAF through `setTimeout` or use a visible window.
+- **Tiles bake in `component_id`, and ids differ per database.** Never commit
+  tiles built from a freshly imported local database: production's overlay
+  would colour the wrong features or none. Build shipped tiles against
+  production (read-only) or a copy of its `components` ids.
 - **Production database is Supabase** (reached via its pooler). Do not point
   local development at it — it holds real user accounts and progress.
 - **Pending:** production `systems.manifest` rows still carry obsolete

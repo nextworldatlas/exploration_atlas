@@ -46,15 +46,24 @@ Three planes, kept separate (spec §1):
 
 ### The map (spec §5)
 
-Per system: PostGIS → GeoJSON → vector tiles (geojson-vt + vt-pbf → MBTiles →
-`go-pmtiles convert`) → `public/tiles/{slug}.pmtiles`. **Every tile feature's
+Per system: PostGIS → GeoJSON → tippecanoe → `public/tiles/{slug}.pmtiles`
+(fallback when tippecanoe is not on PATH: geojson-vt + vt-pbf → MBTiles →
+`go-pmtiles convert`). **Every tile feature's
 id is its `component_id`** — the personal overlay fetches the user's completed
 ids (`/api/systems/:slug/mine`) and recolors via `map.setFeatureState`. No
 per-user tiles, ever. Hovering any feature shows a name tooltip; clicking
 opens the mark-complete popup. `/explore` adds Country / Continent / Globe
-viewport presets above the per-system layer toggles. In production with tippecanoe available:
-`tippecanoe -o {slug}.pmtiles -l components --use-attribute-for-id=…` is the
-equivalent build; the Node pipeline exists so the whole build runs anywhere.
+viewport presets above the per-system layer toggles.
+
+Tiles keep every checklist feature at every zoom (no feature dropping) and are
+built only to `map.tileMaxZoom` (default by geometry: polygon 9, line 10);
+MapLibre overzooms past it. Natural Earth 1:10M sources stop at z7, since
+deeper tiles add bytes but no real detail.
+
+**Component ids differ between databases** (identity columns follow insert
+order), and tiles bake them in. Tiles shipped to production must be built
+against a database whose `components` ids match production's. Rebuilding
+from a freshly imported local database breaks the live overlay.
 
 ## Design — Blueprint · Field Survey
 
@@ -89,12 +98,12 @@ completed in marker orange, wishlisted in dimension cyan. The theme owns these
 ## Getting started
 
 Requires Node 22.13+ (tiles use unflagged `node:sqlite`), PostgreSQL with
-PostGIS 3.x, `unzip`, and the [`pmtiles`](https://github.com/protomaps/go-pmtiles)
-CLI on PATH. On Ubuntu/Debian:
+PostGIS 3.x, `unzip`, and [tippecanoe](https://github.com/felt/tippecanoe)
+2.17+ (or, for the Node fallback, the [`pmtiles`](https://github.com/protomaps/go-pmtiles)
+CLI) on PATH. On Ubuntu/Debian:
 
 ```bash
-sudo apt install postgresql postgresql-16-postgis-3 postgis unzip   # postgis = shp2pgsql
-go install github.com/protomaps/go-pmtiles@latest                    # or a release binary
+sudo apt install postgresql postgresql-16-postgis-3 postgis unzip tippecanoe   # postgis = shp2pgsql
 ```
 
 Then:
