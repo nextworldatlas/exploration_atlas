@@ -46,15 +46,27 @@ Three planes, kept separate (spec §1):
 
 ### The map (spec §5)
 
-Per system: PostGIS → GeoJSON → vector tiles (geojson-vt + vt-pbf → MBTiles →
-`go-pmtiles convert`) → `public/tiles/{slug}.pmtiles`. **Every tile feature's
+Per system: PostGIS → GeoJSON → tippecanoe → `public/tiles/{slug}.pmtiles`
+(fallback when tippecanoe is not on PATH: geojson-vt + vt-pbf → MBTiles →
+`go-pmtiles convert`). **Every tile feature's
 id is its `component_id`** — the personal overlay fetches the user's completed
 ids (`/api/systems/:slug/mine`) and recolors via `map.setFeatureState`. No
 per-user tiles, ever. Hovering any feature shows a name tooltip; clicking
 opens the mark-complete popup. `/explore` adds Country / Continent / Globe
-viewport presets above the per-system layer toggles. In production with tippecanoe available:
-`tippecanoe -o {slug}.pmtiles -l components --use-attribute-for-id=…` is the
-equivalent build; the Node pipeline exists so the whole build runs anywhere.
+viewport presets above the per-system layer toggles.
+
+Tiles keep every checklist feature at every zoom (no feature dropping) and are
+built only to `map.tileMaxZoom` (default by geometry: polygon 9, line 10);
+MapLibre overzooms past it. Natural Earth 1:10M sources stop at z7, since
+deeper tiles add bytes but no real detail.
+
+**Component ids differ between databases** (identity columns follow insert
+order), and tiles bake them in. Tiles shipped to production must carry
+production's ids: build them with `npm run tiles:release`, never plain
+`tiles:build`, which would break the live overlay. (Conversely, released
+tiles colour the wrong features against a local database; run `tiles:build`
+locally and don't commit the result.) The map requests archives with a
+`?v=<content hash>` so browsers never mix cached ranges across a rebuild.
 
 ## Design — Blueprint · Field Survey
 
@@ -83,44 +95,59 @@ unused: size and colour carry hierarchy, not weight. Self-hosted through
 
 **Maps** use the dark OpenFreeMap basemap so the sheet carries through, with
 uniform completion semantics across every system — missing in linework blue,
-completed in marker orange, wishlisted in dimension cyan. Those live in each
-manifest's `map.colors`, so `npm run seed:systems` applies any change.
+completed in marker orange, wishlisted in dimension cyan. The theme owns these
+(`DEFAULT_MAP_COLORS` in `src/lib/manifest.ts`); manifests describe shape only.
 
 ## Getting started
 
-Requires Node 20.11+ and a PostGIS 3.x database.
+Requires Node 22.13+ (tiles use unflagged `node:sqlite`), PostgreSQL with
+PostGIS 3.x, `unzip`, and [tippecanoe](https://github.com/felt/tippecanoe)
+2.17+ (or, for the Node fallback, the [`pmtiles`](https://github.com/protomaps/go-pmtiles)
+CLI) on PATH. On Ubuntu/Debian:
+
+```bash
+sudo apt install postgresql postgresql-16-postgis-3 postgis unzip tippecanoe   # postgis = shp2pgsql
+```
+
+Then:
 
 ```bash
 npm install
-npm run db:start          # portable dev cluster in .dev/ (see below), port 5433
-npm run db:migrate        # schema
+cp .env.example .env      # DATABASE_URL → the local dev cluster
+npm run db:init           # create .dev/pgdata (port 5433), start it, create db "atlas"
+npm run db:migrate        # schema (enables the postgis extension)
 npm run seed:systems      # validate + upsert manifests
 npm run seed:badges
-npm run import:countries  # Natural Earth admin-0 + admin-1 (also US states)
-npm run import:parks      # NPS boundaries for the 63 parks
-npm run import:interstates# NE 10m roads → mainline route × state segments
-npm run tiles:build       # all systems → public/tiles/*.pmtiles
+npm run import:all        # countries + US states, national parks, interstates
 npm run content:stubs     # editorial + stub Learn blocks
 npm run content:facts     # Wikidata SPARQL → facts + factlist blocks
+npm run tiles:build       # all systems → public/tiles/*.pmtiles
 npm run dev               # http://localhost:3000
 ```
 
+Importers download from raw.githubusercontent.com, naciscdn.org and
+services1.arcgis.com; `content:facts` queries query.wikidata.org. Sandboxed
+environments must allow those hosts (plus registry.npmjs.org).
+
 ### The dev database
 
-`.dev/` holds a portable PostgreSQL 17 + PostGIS 3.6 (no admin install, data in
-`.dev/pgdata`, port 5433). It is not committed. To recreate it on another
-machine: unzip the EDB "binaries" archive for PostgreSQL 17 into `.dev/pg`,
-unzip the OSGeo PostGIS bundle over it, then
-`.dev/pg/bin/initdb -D .dev/pgdata -U postgres -A trust` and `npm run db:start`.
-Or point `DATABASE_URL` at any PostGIS database and skip all of that.
-`go-pmtiles` lives at `.dev/bin/go-pmtiles/pmtiles.exe` (or on PATH).
+`scripts/db.mjs` (`npm run db:init|db:start|db:stop|db:status`) manages a
+private cluster in `.dev/pgdata` on port 5433 with trust auth. It is not
+committed. It uses server binaries from `.dev/pg/bin` if present (a portable
+install, e.g. on Windows), else PATH, else `/usr/lib/postgresql/<ver>/bin`.
+Run as root (as in cloud containers), it runs them as the `postgres` system
+user, because PostgreSQL refuses to run as root.
+Or point `DATABASE_URL` at any PostGIS database and skip all of that. Never
+point development at the production database: it holds real accounts.
 
 ## Data plane commands
 
 | Command | What it does |
 |---|---|
 | `npm run import:*` | Idempotent importers, keyed on stable external ids (ISO codes, NPS unit codes, route numbers). Re-running updates, never duplicates. The interstates importer also prunes out-of-scope data (3-digit spurs, legacy per-state segments). |
-| `npm run tiles:build [slug]` | Rebuild PMTiles for one or all systems. |
+| `npm run tiles:build [slug]` | Rebuild PMTiles for one or all systems, with this database's component ids (local use). |
+| `npm run tiles:release [slug]` | Rebuild PMTiles with production's component ids (fetched from the live site's public API, matched by place slug; refuses if the leaf sets differ). Use this for tiles you commit. |
+| `npm run seed:systems -- --sql` | Print the manifest upserts as one SQL transaction, for a SQL console such as Supabase's editor. |
 | `npm run content:stubs` | Ensure every (system, learn-tab) has content; unwritten tabs get an explicit `stub` block. |
 | `npm run content:facts` | Batched Wikidata SPARQL → `facts` table + deterministic factlist blocks. |
 | `npm run rebuild:progress` | Rebuild all `user_system_progress` from `experiences` (progress is derived, never authoritative). |
@@ -171,7 +198,7 @@ Load production data from your local dev database once — no importers needed
 on the server:
 
 ```bash
-.dev/pg/bin/pg_dump -h localhost -p 5433 -U postgres atlas > atlas.sql
+pg_dump postgres://postgres@localhost:5433/atlas > atlas.sql
 psql "<PRODUCTION_DATABASE_URL>" -f atlas.sql
 ```
 

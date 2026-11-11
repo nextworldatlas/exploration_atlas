@@ -16,6 +16,7 @@
   "map": {
     "pmtilesUrl": "/api/tiles/us-states.pmtiles",
     "sourceLayer": "components",
+    "tileMaxZoom": 7,
     "layers": [
       { "type": "fill", "paint": { "fill-opacity": 0.45 } },
       { "type": "line", "paint": { "line-width": 0.75 } }

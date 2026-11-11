@@ -1,16 +1,19 @@
 // Tile build (data plane, per system):
 //   PostGIS ── ST_AsGeoJSON ──▶ leaf features (id = component_id, ALWAYS)
-//           ── geojson-vt + vt-pbf ──▶ MBTiles (node:sqlite)
-//           ── go-pmtiles convert ──▶ public/tiles/{slug}.pmtiles
+//           ── tippecanoe ──▶ public/tiles/{slug}.pmtiles            (preferred)
+//   or      ── geojson-vt + vt-pbf ──▶ MBTiles (node:sqlite)
+//           ── go-pmtiles convert ──▶ public/tiles/{slug}.pmtiles    (fallback)
 //
 // The personal overlay hinges on feature id == component_id: the client sets
 // feature-state by component id to recolor done/missing without per-user tiles.
 //
-// In production with tippecanoe available, the equivalent is:
-//   tippecanoe -o {slug}.pmtiles -l components --use-attribute-for-id=component_id …
-// This Node pipeline exists so the whole build runs anywhere Node runs.
+// tippecanoe is used when it is on PATH: it simplifies per zoom, so tiles are
+// far smaller. Feature dropping is disabled because every checklist item must
+// be visible (and markable) at every zoom. The Node pipeline exists so the
+// build runs anywhere Node runs; force it with TILES_BUILDER=node.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { DatabaseSync } from "node:sqlite";
@@ -24,18 +27,43 @@ const OUT_DIR = path.join(ROOT, "public", "tiles");
 
 const MAX_ZOOM: Record<string, number> = { line: 10, polygon: 9, point: 12 };
 
+function hasTippecanoe(): boolean {
+  if (process.env.TILES_BUILDER === "node") return false;
+  try {
+    execFileSync("tippecanoe", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function findPmtiles(): string {
   const bundled = path.join(ROOT, ".dev", "bin", "go-pmtiles", "pmtiles.exe");
   return existsSync(bundled) ? bundled : "pmtiles";
 }
 
-async function buildSystem(slug: string): Promise<void> {
+// Component ids differ between databases, and tiles bake them in. With
+// --ids-from <origin>, ids come from that deployment's public components API,
+// matched by place slug, so tiles built from a local import fit production.
+async function fetchIds(origin: string, slug: string): Promise<Map<string, number>> {
+  const ids = new Map<string, number>();
+  for (let offset = 0; ; offset += 500) {
+    const url = `${origin}/api/systems/${slug}/components?limit=500&offset=${offset}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
+    const page: { components: { id: string; place_slug: string }[] } = await res.json();
+    for (const c of page.components) ids.set(c.place_slug, Number(c.id));
+    if (page.components.length < 500) return ids;
+  }
+}
+
+async function buildSystem(slug: string, idsFrom?: string): Promise<void> {
   const sys = await pool.query(`SELECT id, manifest FROM systems WHERE slug = $1`, [slug]);
   if (!sys.rows[0]) throw new Error(`unknown system '${slug}'`);
   const systemId = sys.rows[0].id;
   const geometryType: string = sys.rows[0].manifest.geometryType;
   const sourceLayer: string = sys.rows[0].manifest.map.sourceLayer;
-  const maxZoom = MAX_ZOOM[geometryType] ?? 10;
+  const maxZoom: number = sys.rows[0].manifest.map.tileMaxZoom ?? MAX_ZOOM[geometryType] ?? 10;
 
   const res = await pool.query(
     `SELECT c.id AS component_id, p.name, p.slug, c.role, c.attrs,
@@ -55,6 +83,19 @@ async function buildSystem(slug: string): Promise<void> {
     [systemId]
   );
 
+  const remote = idsFrom ? await fetchIds(idsFrom, slug) : null;
+  if (remote) {
+    const local = new Set(res.rows.map((r) => r.slug as string));
+    const missing = [...local].filter((s) => !remote.has(s));
+    const extra = [...remote.keys()].filter((s) => !local.has(s));
+    if (missing.length || extra.length) {
+      throw new Error(
+        `${slug}: leaves differ from ${idsFrom}; refusing to build mismatched tiles.\n` +
+          `  only local: ${missing.join(", ") || "-"}\n  only remote: ${extra.join(", ") || "-"}`
+      );
+    }
+  }
+
   const features = res.rows.map((r) => {
     // scalar component attrs ride along as tile properties so manifest layers
     // (e.g. label expressions) can reference them
@@ -65,11 +106,42 @@ async function buildSystem(slug: string): Promise<void> {
     );
     return {
       type: "Feature" as const,
-      id: Number(r.component_id), // guardrail: PMTiles feature id = component_id
+      // guardrail: PMTiles feature id = component_id (the target database's)
+      id: remote ? remote.get(r.slug)! : Number(r.component_id),
       geometry: JSON.parse(r.geometry),
       properties: { ...scalarAttrs, name: r.name, slug: r.slug },
     };
   });
+  mkdirSync(OUT_DIR, { recursive: true });
+  const pmtilesPath = path.join(OUT_DIR, `${slug}.pmtiles`);
+  rmSync(pmtilesPath, { force: true });
+
+  if (hasTippecanoe()) {
+    console.log(`${slug}: ${features.length} leaf features → tippecanoe (maxzoom ${maxZoom})`);
+    const geojsonPath = path.join(tmpdir(), `atlas-${slug}-${process.pid}.geojsonl`);
+    writeFileSync(geojsonPath, features.map((f) => JSON.stringify(f)).join("\n") + "\n");
+    execFileSync(
+      "tippecanoe",
+      [
+        "-o", pmtilesPath,
+        "-l", sourceLayer,
+        "-n", slug,
+        "-Z0", `-z${maxZoom}`,
+        "-r1", // keep every feature at every zoom: no dot-dropping…
+        "--no-feature-limit", // …and no dropping to fit tile limits
+        "--no-tile-size-limit",
+        ...(geometryType === "polygon" ? ["--detect-shared-borders"] : []),
+        "--quiet",
+        "--force",
+        geojsonPath,
+      ],
+      { stdio: "inherit" }
+    );
+    rmSync(geojsonPath, { force: true });
+    console.log(`${slug}: → public/tiles/${slug}.pmtiles`);
+    return;
+  }
+
   console.log(`${slug}: ${features.length} leaf features → tiles (maxzoom ${maxZoom})`);
 
   const index = geojsonvt(
@@ -77,7 +149,6 @@ async function buildSystem(slug: string): Promise<void> {
     { maxZoom, indexMaxZoom: 5, buffer: 64, extent: 4096 }
   );
 
-  mkdirSync(OUT_DIR, { recursive: true });
   const mbtilesPath = path.join(OUT_DIR, `${slug}.mbtiles`);
   rmSync(mbtilesPath, { force: true });
   const db = new DatabaseSync(mbtilesPath);
@@ -132,21 +203,23 @@ async function buildSystem(slug: string): Promise<void> {
   for (const [k, v] of Object.entries(metadata)) meta.run(k, v);
   db.close();
 
-  const pmtilesPath = path.join(OUT_DIR, `${slug}.pmtiles`);
-  rmSync(pmtilesPath, { force: true });
   execFileSync(findPmtiles(), ["convert", mbtilesPath, pmtilesPath], { stdio: "inherit" });
   rmSync(mbtilesPath, { force: true });
   console.log(`${slug}: ${count} tiles → public/tiles/${slug}.pmtiles`);
 }
 
 async function main() {
-  const arg = process.argv[2];
+  const args = process.argv.slice(2);
+  const at = args.indexOf("--ids-from");
+  const idsFrom = at >= 0 ? args.splice(at, 2)[1]?.replace(/\/+$/, "") : undefined;
+  if (at >= 0 && !idsFrom) throw new Error("--ids-from needs an origin, e.g. https://example.com");
+  const arg = args[0];
   const slugs = arg
     ? [arg]
     : (await pool.query(`SELECT slug FROM systems WHERE status = 'active' ORDER BY slug`)).rows.map(
         (r) => r.slug
       );
-  for (const slug of slugs) await buildSystem(slug);
+  for (const slug of slugs) await buildSystem(slug, idsFrom);
   await pool.end();
 }
 

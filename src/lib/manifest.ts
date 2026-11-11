@@ -44,6 +44,9 @@ export const manifestSchema = z
       // No per-system colours: completion semantics are uniform, so the
       // palette is theme-owned (see DEFAULT_MAP_COLORS). Manifests describe
       // shape — geometry, widths, zoom ranges, label fields.
+      // Deepest zoom tiles are built to; the map overzooms past it. Match the
+      // source data's resolution (default by geometryType, see build-tiles).
+      tileMaxZoom: z.number().int().min(0).max(14).optional(),
       center: z.tuple([z.number(), z.number()]).optional(),
       zoom: z.number().optional(),
     }),
